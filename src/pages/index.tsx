@@ -29,9 +29,9 @@ export default function Index() {
           display: flex;
           align-items: start;
           justify-content: center;
-          margin-left: 15rem;
-          margin-right: 25rem;
-          margin-top: 10rem;
+          margin-left: 5vw;
+          margin-right: 20vw;
+          margin-top: 5vh;
           padding: 0 1.5rem;
         }
         h1 {
