@@ -1,0 +1,77 @@
+---
+slug: web-crawling-i
+title: Distributed Web Crawling - I The basics
+date: 2021-02-20
+author: Dan
+tags:
+  - web-crawling
+  - python
+  
+---
+
+This will be a series of project updates in creating a distributed web crawler. The aim is to write a modular web crawler that is scalable, distributable and resilient. 
+
+## What is a Web Crawler?
+
+
+A Web Crawler is a program which visits web pages sequentially and processes the content. A general use case is to transform unstructured data on web pages into structured data in a database for example.
+The process would generally be started by providing one URL and a set of rules for extracting content and extracting the next links to visit from that page. Given these things the 
+crawler would begin visiting pages until there were no more links that matched the link extraction rules.
+
+A popular example of a Web Crawling framework is Scrapy, https://scrapy.org/. Definately check it out if you want to gain a deeper understanding of Web Scraping and have a play with it yourself.
+
+
+## Writing our own simple Crawler
+
+Given the problem definition there are 3 clear components:
+
+- The 'Engine' which will retrieve page contents and distribute it to the other components
+- Result outputters which will process the content and output where necessary
+- Link extractors which will extract further links from the contents 
+
+Using Python and the popular BeautifulSoup package to process HTML we could write a simple Web Crawler with each of the main components as one method.
+
+```python
+from bs4.element import SoupStrainer
+from bs4 import BeautifulSoup
+import requests
+
+# The scraper 'Engine' that drives the processing
+
+def scrape(link): 
+    html = requests.get(link).text
+    process_result(html)
+    for l in  extract_links(html):
+        scrape(l)
+
+# Link extractor that grabs specific links from scraped pages
+
+def extract_links(html):
+    soup = BeautifulSoup(html, parse_only=SoupStrainer('a'), features="html.parser")
+    return [link['href'] for link in soup.find_all(attrs={'class': 'storylink'}) if link.has_attr('href')]
+
+# Result processer that processes the html and outputs any results
+
+def process_result(html):
+    soup = BeautifulSoup(html, features="html.parser")
+    title = soup.title.string if soup.title else ''
+    print(title)
+
+```
+
+When run, these functions would perform the crawling process defined above. Run with https://news.ycombinator.com/ as the seed link we get an output of the title of all of the article pages like so:
+
+```python
+# Page: Hacker News
+# Page: The Beirut Bank Job – Darknet Diaries
+# Page: Silent Running: The sci-fi that predicted modern crises - BBC Culture
+# Page: Choose Boring Technology
+# Page: Nvidia Limits RTX 3060 Hash Rate, Unveils New 'Cryptocurrency Mining Processor' Line of GPUs | Tom's Hardware
+# ...
+```
+
+## Next...
+
+This would serve as a very crude MVP of a web crawler, but we can do better. 
+In the following post in this series we will look at how we might distribute this process across multiple machines so we can add resilience, scale, and plug-in more extractors and processors.
+

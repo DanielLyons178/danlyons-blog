@@ -1,0 +1,19 @@
+{
+  "base_url": "https://wutali-nextjs-netlify-blog.netlify.app",
+  "site_title": "Dan Lyons Blog",
+  "site_description": "Personal blog of Dan Lyons",
+  "site_keywords": [
+    {
+      "keyword": "blog"
+    },
+    {
+      "keyword": "developer"
+    },
+    {
+      "keyword": "software"
+    }
+  ],
+  "posts_per_page": 5,
+  "twitter_account": "",
+  "github_account": "danlyons178"
+}
