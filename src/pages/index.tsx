@@ -29,7 +29,7 @@ export default function Index() {
           display: flex;
           align-items: start;
           justify-content: center;
-          margin-left: 5vw;
+          margin-left: 20vw;
           margin-right: 20vw;
           margin-top: 5vh;
           padding: 0 1.5rem;
