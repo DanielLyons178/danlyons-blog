@@ -41,3 +41,7 @@ a:hover {
   top: 0;
   left: 0;
 }
+
+blockquote{
+  font-style: italic;
+}

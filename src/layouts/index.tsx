@@ -105,6 +105,11 @@ export default function Index({
             article {
               flex: 1 0 auto;
             }
+            figure {
+              margin-left: auto;
+              margin-right: auto;
+              width: 50%
+            }
             h1 {
               margin: 0 0 0.5rem;
               font-size: 2.25rem;
