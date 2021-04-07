@@ -1,0 +1,188 @@
+---
+slug: web-crawling-iii
+title: Distributed Web Crawling - III Running
+date: 2021-04-07
+author: Dan
+tags:
+  - web-crawling
+  - python
+  - docker
+  
+---
+
+Given our multi-service distributed application, we want to make it as easy as possible to run. One solution springs to my mind immidiately for this, **Docker**
+
+## Why Docker?
+
+The reason I turn to Docker as a sloution for running workloads of this sort is that it can provide a clear line of seperation between all services where, event when running on the same machine,
+they can act completely independantly in a distributed fashion. Using Docker-Compose we can also define an easy way to run everything at once. 
+
+Also, given the fact that we will want to define many different types of __"Link Extractor"__ or __"Result Outputter"__s we can create a base docker image which will contain everything required
+to make these components runnable. Including a bootstrap command.
+
+## Project structure
+
+Starting off, the project needs to be structured in a modular fasion so that we can install the core/ client libraries independantly. The structure we opted for was as follows:
+
+```bash
+.
+├── scraper
+│   ├── scraper-common
+│   │   └── ...
+│   ├── scraper-core
+│   │   └── ...
+│   ├── scraper-client
+│   │   └── ...
+│   └── sample
+│       └── ...
+└── docker
+    ├── scraper-core
+    │   └── Dockerfile
+    ├── scraper-client
+    │   └── Dockerfile
+    ├── sample
+    │   └── Dockerfile
+    └─ docker-compose.yaml
+```
+
+The idea behind this is that the common package contains code that can be reused by both the core and client processes, the client is what is used to create the specific Link Extractor or Result
+Outputters and the core is the engine that drives the whole process. Therefore the core Dockerfile takes the common and core packages, installs them and runs the core process, pretty straigtforward.
+
+```docker
+# scraper-core/Dockerfile
+FROM python:3.8.8-alpine
+
+COPY ./scraper/ /src/scraper
+
+RUN pip install file:///src/scraper/scraper-common
+RUN pip install file:///src/scraper/scraper-core
+
+RUN rm -rf /src
+
+ENTRYPOINT ["python", "-m", "scraper.core"]
+```
+
+The client Dockerfile copies both the common and client libraries and runs the scraper client startup script. The interesting thing with this is that it is never intended to be run directly, but to
+serve as a base Dockerfile for clients to specify further scraping components.
+
+```docker
+# scraper-client/Dockerfile
+FROM python:3.8.8-alpine
+
+COPY ./scraper/ /src/scraper
+
+RUN pip install file:///src/scraper/scraper-common
+RUN pip install file:///src/scraper/scraper-client
+
+RUN rm -rf /src
+
+ENTRYPOINT ["python", "-m", "scraper.client"]
+```
+
+And then it is simple for clients to use this file as a base like so, since it will already contain all required dependancies and automatically run the startup script.
+
+```docker
+# sample/Dockerfile
+FROM scraper-client-base
+
+COPY ./scraper/sample /src/sample
+
+RUN pip install /src/sample
+```
+
+## Wrapping This Together
+
+To tie this all together, building and starting multiple instances off these Docker images manually would be cumbersome. This is why I opted for Docker-Compose. Docker-Compose allows us
+to define all of our services, environmental variables and even 3rd party images that we want to run as a bundle making the whole thing a "one-click run" process. Docker-Compose requires 
+a YAML file whose specification is defined [here](https://docs.docker.com/compose/compose-file/). Ours looks like this:
+
+```yaml
+version: "3.9"
+
+services: 
+  core:
+    build: 
+      context: ../
+      dockerfile: ./docker/scraper-core/Dockerfile
+    environment: 
+      - "RABBIT_HOST=scrape-queue" 
+      - "RABBIT_PORT=5672"
+      - "RABBIT_USER=${RABBITMQ_DEFAULT_USER}" 
+      - "RABBIT_PASS=${RABBITMQ_DEFAULT_PASS}" 
+      - "REDIS_HOST=scrape-cache" 
+      - "REDIS_PORT=6379"
+      - "REDIS_PASS=${REDIS_PASS}"
+    depends_on: 
+      - "scrape-queue"
+      - "scrape-cache"
+    restart: on-failure
+
+  sample-link-extractor: 
+    build: 
+      context: ../
+      dockerfile: ./docker/sample/Dockerfile
+    environment: 
+      - "RABBIT_HOST=scrape-queue" 
+      - "RABBIT_PORT=5672" 
+      - "RABBIT_USER=${RABBITMQ_DEFAULT_USER}" 
+      - "RABBIT_PASS=${RABBITMQ_DEFAULT_PASS}" 
+    command: links --extractors sample.sample_extractor.SampleExtractor
+    depends_on: 
+      - "scrape-queue"
+    restart: on-failure
+
+  sample-body-reader: 
+    build: 
+      context: ../
+      dockerfile: ./docker/sample/Dockerfile
+    environment: 
+      - "RABBIT_HOST=scrape-queue" 
+      - "RABBIT_PORT=5672" 
+      - "RABBIT_USER=${RABBITMQ_DEFAULT_USER}" 
+      - "RABBIT_PASS=${RABBITMQ_DEFAULT_PASS}" 
+    command: body -br sample.sample_reader.SampleReader
+    depends_on: 
+      - "scrape-queue"
+    restart: on-failure
+
+
+  api:
+    build: 
+      context: ../
+      dockerfile: ./docker/scraper-api/Dockerfile
+    environment: 
+      - "RABBIT_HOST=scrape-queue" 
+      - "RABBIT_PORT=5672"
+      - "RABBIT_USER=${RABBITMQ_DEFAULT_USER}" 
+      - "RABBIT_PASS=${RABBITMQ_DEFAULT_PASS}" 
+    ports: 
+      - "8082:8050"
+    depends_on: 
+      - "scrape-queue"
+    restart: on-failure
+
+  scrape-queue:
+    image: rabbitmq:3-management
+    ports: 
+      - "5672:5672"
+      - "15672:15672"
+    hostname: scrape-queue
+    env_file: .env
+    healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:15672"]
+        interval: 30s
+        timeout: 10s
+        retries: 5
+
+  scrape-cache:
+    image: 'redis:4-alpine'
+    command: redis-server --requirepass ${REDIS_PASS}
+    ports:
+      - '6379:6379'
+```
+
+The sensitive environmental variables have been extracted into a **.env** file and are referenced by the **${VAR}** syntax. The processes call also reference each other by these service names.
+
+## API and Starting a Scrape
+
+***To be continued...***
